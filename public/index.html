@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Insurance Claim → Excel Filler</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #f0f4f8;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+      padding: 40px;
+      max-width: 760px;
+      width: 100%;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      color: #1a2e44;
+      margin-bottom: 6px;
+    }
+
+    .subtitle {
+      color: #64748b;
+      font-size: 0.9rem;
+      margin-bottom: 28px;
+    }
+
+    /* Drop zone */
+    .drop-zone {
+      border: 2px dashed #94a3b8;
+      border-radius: 12px;
+      padding: 40px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      background: #f8fafc;
+    }
+
+    .drop-zone.drag-over {
+      border-color: #3b82f6;
+      background: #eff6ff;
+    }
+
+    .drop-zone svg {
+      width: 48px;
+      height: 48px;
+      color: #94a3b8;
+      margin-bottom: 12px;
+    }
+
+    .drop-zone p {
+      color: #475569;
+      font-size: 0.95rem;
+    }
+
+    .drop-zone span {
+      color: #3b82f6;
+      font-weight: 600;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    .drop-zone small {
+      display: block;
+      margin-top: 6px;
+      color: #94a3b8;
+      font-size: 0.8rem;
+    }
+
+    #fileInput { display: none; }
+
+    /* Previews */
+    .preview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .preview-item {
+      position: relative;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #e2e8f0;
+      background: #f8fafc;
+    }
+
+    .preview-item img {
+      width: 100%;
+      height: 90px;
+      object-fit: cover;
+      display: block;
+    }
+
+    .preview-item .remove-btn {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      background: rgba(0,0,0,0.55);
+      color: #fff;
+      border: none;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      font-size: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+    }
+
+    .preview-item .file-name {
+      font-size: 0.7rem;
+      color: #475569;
+      padding: 4px 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Action area */
+    .action-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-top: 24px;
+    }
+
+    .btn-primary {
+      background: #1d4ed8;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 28px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-primary:hover:not(:disabled) { background: #1e40af; }
+    .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    .btn-clear {
+      background: none;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 11px 20px;
+      font-size: 0.9rem;
+      color: #64748b;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+
+    .btn-clear:hover { border-color: #94a3b8; }
+
+    /* Spinner */
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2.5px solid rgba(255,255,255,0.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Status */
+    .status {
+      margin-top: 20px;
+      padding: 14px 16px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      display: none;
+    }
+
+    .status.info    { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; display: block; }
+    .status.success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; display: block; }
+    .status.error   { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; display: block; }
+
+    .file-count {
+      color: #64748b;
+      font-size: 0.88rem;
+      margin-top: 12px;
+    }
+
+    /* Steps */
+    .steps {
+      margin-top: 28px;
+      border-top: 1px solid #e2e8f0;
+      padding-top: 20px;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .step {
+      flex: 1;
+      min-width: 140px;
+      background: #f8fafc;
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-size: 0.82rem;
+      color: #475569;
+    }
+
+    .step strong {
+      display: block;
+      color: #1a2e44;
+      margin-bottom: 2px;
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+<div class="card">
+  <h1>📋 Insurance Claim → Excel Filler</h1>
+  <p class="subtitle">Upload document images · AI extracts all fields · Downloads filled <strong>Format_filled.xlsx</strong></p>
+
+  <div class="drop-zone" id="dropZone">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+    </svg>
+    <p>Drag &amp; drop images here, or <span id="browseBtn">browse</span></p>
+    <small>DL · Insurance Policy · Vehicle RC · Claim Form · Repair Estimate · Any combination</small>
+  </div>
+  <input type="file" id="fileInput" accept="image/*" multiple />
+
+  <div class="preview-grid" id="previewGrid"></div>
+  <div class="file-count" id="fileCount"></div>
+
+  <div class="action-row">
+    <button class="btn-primary" id="processBtn" disabled>
+      <span id="btnLabel">Extract &amp; Fill Excel</span>
+      <span class="spinner" id="spinner" style="display:none"></span>
+    </button>
+    <button class="btn-clear" id="clearBtn">Clear</button>
+  </div>
+
+  <div class="status" id="status"></div>
+
+  <div class="steps">
+    <div class="step"><strong>Step 1</strong>Upload your document images</div>
+    <div class="step"><strong>Step 2</strong>Click "Extract &amp; Fill Excel"</div>
+    <div class="step"><strong>Step 3</strong>Download opens automatically</div>
+  </div>
+</div>
+
+<script>
+  const dropZone    = document.getElementById('dropZone');
+  const fileInput   = document.getElementById('fileInput');
+  const browseBtn   = document.getElementById('browseBtn');
+  const previewGrid = document.getElementById('previewGrid');
+  const fileCount   = document.getElementById('fileCount');
+  const processBtn  = document.getElementById('processBtn');
+  const clearBtn    = document.getElementById('clearBtn');
+  const statusEl    = document.getElementById('status');
+  const spinner     = document.getElementById('spinner');
+  const btnLabel    = document.getElementById('btnLabel');
+
+  let selectedFiles = [];
+
+  // Browse click
+  browseBtn.addEventListener('click', () => fileInput.click());
+  dropZone.addEventListener('click', (e) => { if (e.target !== browseBtn) fileInput.click(); });
+
+  // File input change
+  fileInput.addEventListener('change', () => addFiles(Array.from(fileInput.files)));
+
+  // Drag & drop
+  dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    addFiles(Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/')));
+  });
+
+  function addFiles(newFiles) {
+    const existing = new Set(selectedFiles.map(f => f.name + f.size));
+    for (const f of newFiles) {
+      if (!existing.has(f.name + f.size)) selectedFiles.push(f);
+    }
+    renderPreviews();
+    fileInput.value = '';
+  }
+
+  function renderPreviews() {
+    previewGrid.innerHTML = '';
+    selectedFiles.forEach((file, index) => {
+      const item = document.createElement('div');
+      item.className = 'preview-item';
+
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(file);
+      img.onload = () => URL.revokeObjectURL(img.src);
+
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'remove-btn';
+      removeBtn.textContent = '×';
+      removeBtn.onclick = (e) => { e.stopPropagation(); selectedFiles.splice(index, 1); renderPreviews(); };
+
+      const name = document.createElement('div');
+      name.className = 'file-name';
+      name.textContent = file.name;
+
+      item.append(img, removeBtn, name);
+      previewGrid.appendChild(item);
+    });
+
+    fileCount.textContent = selectedFiles.length
+      ? `${selectedFiles.length} image${selectedFiles.length > 1 ? 's' : ''} selected`
+      : '';
+    processBtn.disabled = selectedFiles.length === 0;
+    clearStatus();
+  }
+
+  // Clear
+  clearBtn.addEventListener('click', () => {
+    selectedFiles = [];
+    renderPreviews();
+    clearStatus();
+  });
+
+  // Process
+  processBtn.addEventListener('click', async () => {
+    if (selectedFiles.length === 0) return;
+
+    setLoading(true);
+    showStatus('info', `⏳ Sending ${selectedFiles.length} image(s) to AI… this may take 15–30 seconds.`);
+
+    const formData = new FormData();
+    selectedFiles.forEach(f => formData.append('images', f));
+
+    try {
+      const response = await fetch('/api/process', { method: 'POST', body: formData });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(err.error || `HTTP ${response.status}`);
+      }
+
+      // Trigger download
+      const blob = await response.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = 'Format_filled.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      showStatus('success', '✅ Done! Your filled Excel file has been downloaded.');
+    } catch (err) {
+      showStatus('error', `❌ Error: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  });
+
+  function setLoading(on) {
+    processBtn.disabled = on;
+    spinner.style.display = on ? 'block' : 'none';
+    btnLabel.textContent = on ? 'Processing…' : 'Extract & Fill Excel';
+  }
+
+  function showStatus(type, msg) {
+    statusEl.className = `status ${type}`;
+    statusEl.textContent = msg;
+  }
+
+  function clearStatus() {
+    statusEl.className = 'status';
+    statusEl.textContent = '';
+  }
+</script>
+</body>
+</html>
